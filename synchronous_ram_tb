@@ -1,0 +1,101 @@
+module synchronous_ram_tb;
+
+    reg clk;
+    reg we;
+    reg [9:0] addr;
+    reg [7:0] din;
+    wire [7:0] dout;
+
+    integer errors;
+
+    // Instantiate RAM
+    synchronous_ram DUT (
+        .clk(clk),
+        .we(we),
+        .addr(addr),
+        .din(din),
+        .dout(dout)
+    );
+
+    // Clock generation: 10 ns period
+    initial begin
+        clk = 1'b0;
+        forever #5 clk = ~clk;
+    end
+
+    // Write task
+    task write_ram;
+        input [9:0] address;
+        input [7:0] data;
+        begin
+            @(negedge clk);
+            addr = address;
+            din  = data;
+            we   = 1'b1;
+
+            @(posedge clk);
+            #1;
+            $display("WRITE: Address=%0d Data=%h",
+                     address, data);
+        end
+    endtask
+
+    // Read and verify task
+    task read_ram;
+        input [9:0] address;
+        input [7:0] expected;
+        begin
+            @(negedge clk);
+            addr = address;
+            we   = 1'b0;
+
+            @(posedge clk);
+            #1;
+
+            if (dout !== expected) begin
+                $display(
+                    "FAIL: Address=%0d Expected=%h Actual=%h",
+                    address, expected, dout
+                );
+                errors = errors + 1;
+            end
+            else begin
+                $display(
+                    "PASS: Address=%0d Data=%h",
+                    address, dout
+                );
+            end
+        end
+    endtask
+
+    initial begin
+        we     = 1'b0;
+        addr   = 10'd0;
+        din    = 8'd0;
+        errors = 0;
+
+        // Allow clock to run
+        repeat (2) @(negedge clk);
+
+        // Write test data
+        write_ram(10'd0,    8'h55);
+        write_ram(10'd1,    8'hA5);
+        write_ram(10'd512,  8'h00);
+        write_ram(10'd1023, 8'hFF);
+
+        // Read back and verify
+        read_ram(10'd0,    8'h55);
+        read_ram(10'd1,    8'hA5);
+        read_ram(10'd512,  8'h00);
+        read_ram(10'd1023, 8'hFF);
+
+        // Final result
+        if (errors == 0)
+            $display("ALL TESTS PASSED");
+        else
+            $display("TESTS FAILED: %0d errors", errors);
+
+        $finish;
+    end
+
+endmodule
